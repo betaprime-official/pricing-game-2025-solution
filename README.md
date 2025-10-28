@@ -15,11 +15,19 @@ For complete rules, objectives, and scoring details, see [Pricing-Game-2025.md](
 
 ---
 
-## Setup & Installation
-
 ### Prerequisites
 
-- **Python 3.10+** (required)
+- **Python 3.10+** (should be included in Positron, or for VS Code can be installed through extensions or Microsoft Store)
+
+## Setup & Installation
+
+In the terminal, we will execute a sequence of code lines to create a virtual environment (a folder inside the repository) where we will install all the required libraries and dependencies. The procedure will be:
+
+1. Create Virtual environment
+2. Activate Virtual environment
+3. Run pip install to install all the listed libraries
+
+See below the commands you need to write in your terminal
 
 ### 1. Create Virtual Environment
 
@@ -27,7 +35,6 @@ For complete rules, objectives, and scoring details, see [Pricing-Game-2025.md](
 ```cmd
 py -m venv .venv
 ```
-
 **On Windows (alternative):**
 ```cmd
 python -m venv .venv
@@ -37,19 +44,18 @@ python -m venv .venv
 python3 -m venv .venv
 ```
 
-
 ### 2. Activate Virtual Environment
 
 **On Windows:**
 
+Activate the virtual environment:
+```cmd
+.venv\Scripts\activate
+```
+
 *Note: If you get an execution policy error, first run this in PowerShell as Administrator:*
 ```powershell
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-Then activate the virtual environment:
-```cmd
-.venv\Scripts\activate
 ```
 
 *Alternative for PowerShell:*
@@ -62,7 +68,6 @@ Then activate the virtual environment:
 source .venv/bin/activate
 ```
 
-
 ### 3. Install Dependencies
 
 ```bash
@@ -70,14 +75,17 @@ pip install -U pip
 pip install -r requirements.txt
 ```
 
-### 4. Place Input Files
+---
 
-Before running the workflow, place your input files in the `files/` directory:
+## Place Input Files for the Game
+
+There are some test files in the `files/` directory. For the actual Pricing Game competition you will receive your actual files.
 
 1. **Loss Data**: Place `p{N}_loss_data.csv` in the `files/` directory
 2. **Rating Structure**: Place `p{N}_rating_structure.json` in the `files/` directory
+3. **Retention Model**: You must have the file `retention.json` already in the directory
 
-Where `{N}` is your player number (1-5).
+Where `{N}` is your player number.
 
 ---
 
