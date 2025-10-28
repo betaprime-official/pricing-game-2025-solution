@@ -1,0 +1,38 @@
+# files
+/outputs
+# /files/*
+/solution/*
+/.pytest_cache
+
+# Quarto
+/.quarto/
+**/*.quarto_ipynb
+_site/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Session data (ignore all session directories)
+
+.sessions/
+
+# Tests (internal only)
+tests/
+

@@ -1,0 +1,33 @@
+{
+  "base_values": {
+    "value": 219.79
+  },
+  "relativities": {
+    "vehicle_transmission": {
+      "automatic": 1.0,
+      "manual": 1.0187
+    },
+    "province": {
+      "RI": 1.0,
+      "AS": 1.0533,
+      "BA": 0.6393,
+      "HA": 1.5009,
+      "HS": 1.206,
+      "JF": 0.6157,
+      "JZ": 1.4701,
+      "MD": 1.3448,
+      "MK": 1.7372,
+      "NJ": 1.1394,
+      "QS": 1.4895,
+      "SH": 1.1125
+    },
+    "body_type": {
+      "sedan": 1.0,
+      "4x4": 3.1571,
+      "heavycomm": 2.3756,
+      "lightcomm": 1.7781,
+      "pickup": 1.926
+    }
+  },
+  "base_group": "body_type: sedan, province: RI, vehicle_transmission: automatic"
+}

@@ -1,0 +1,765 @@
+---
+title: "Pricing Game Workflow"
+format: html
+---
+
+## Setup
+
+This document assumes dependencies are installed and the `.venv` interpreter is selected.
+
+**📋 First time setup:** Copy your team's `p{X}_loss_data.csv` and `p{X}_rating_structure.json` files from `wds/` to `files/` directory before running this chunk.
+
+```{python}
+#| echo: false
+import sys, json, os
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+from pg_utils.methods import identify_player_number, parse_json, calculate_means_with_factors, validate_rating_structure, aggregate_by_group, calculate_loss_ratio, get_rating_variables, glm_to_rating_structure, calculate_retention_probability, retention_analysis_by_variable, prepare_profitability_data, calculate_metrics, portfolio_summary, validate_glm_calculation, flatten_nominal_relativities
+from pg_utils.charts import loss_ratio_chart, pure_premium_chart, frequency_chart, severity_chart, relativities_chart, rating_relativities_chart, observed_vs_predicted_chart, premium_delta_histogram, retention_analysis_chart, profitability_comparison_chart
+from pg_utils.glm_utils import compare_lr_test_glm, apply_bands, compare_add_one_variable, calculate_observed_vs_predicted, extract_relativities_table, build_glm_formula, generate_banding_config, apply_banding_config, save_banding_config, load_banding_config, create_consolidated_config
+
+# Set pandas display options for European formatting
+pd.options.display.float_format = lambda x: f'{x:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+print(f"Python {sys.version}")
+
+# Identify player number from loss data file
+player_num, loss_data_file = identify_player_number(data_dir='files')
+print(f"📊 Player {player_num} detected")
+```
+
+## Load data
+
+-   Read CSV loss data
+-   Display column names
+
+```{python}
+# Load data
+df = pd.read_csv(loss_data_file)
+print(f"✅ Loaded {len(df):,} records with {len(df.columns)} columns from {loss_data_file}")
+df.head()
+```
+
+## Read current rating structure
+
+-   Read JSON file
+-   Display JSON and validation results
+
+```{python}
+# Load rating structure JSON with player prefix
+rating_structure_file = f'files/p{player_num}_rating_structure.json'
+rating = parse_json(rating_structure_file)
+validation = validate_rating_structure(rating)
+print(f"Loaded rating structure from {rating_structure_file}")
+print(json.dumps(rating, indent=2))
+validation
+```
+
+## Portfolio Summary
+
+```{python}
+# Calculate portfolio-level metrics using helper function
+metrics = portfolio_summary(df)
+
+# Display as a formatted table
+pd.DataFrame(list(metrics.items()), columns=['Metric', 'Value'])
+```
+
+
+## Univariate analysis
+
+```{python}
+# Get rating variables using helper function
+rating_vars = get_rating_variables(df)
+
+# Select variable for analysis (default to first categorical variable)
+print(rating_vars['all'])
+selected_var = rating_vars['all'][1]
+print(selected_var)
+
+# Calculate metrics using helper function
+grouped = calculate_metrics(df, selected_var)
+
+# Display summary table
+print(f"\nSummary for {selected_var}:")
+grouped.round(2)
+```
+
+```{python}
+# Loss Ratio chart
+loss_ratio_chart(grouped, selected_var).show()
+```
+
+```{python}
+# Pure Premium chart
+pure_premium_chart(grouped, selected_var).show()
+```
+
+```{python}
+# Frequency chart
+frequency_chart(grouped, selected_var).show()
+```
+
+```{python}
+# Severity chart
+severity_chart(grouped, selected_var).show()
+```
+
+## Multivariate Analysis
+
+### Frequency GLM
+
+#### Data Preparation
+
+```{python}
+# Prepare frequency dataset (all policies)
+frequency_dataset = df.copy()
+print(f"Frequency dataset: {len(frequency_dataset):,} policies")
+
+# Identify numeric variables for potential banding
+numeric_vars = rating_vars['numeric']
+categorical_vars = rating_vars['categorical']
+print(f"\nNumeric variables: {numeric_vars}")
+print(f"Categorical variables: {categorical_vars}")
+```
+
+#### Generate Frequency Banding Configuration
+
+```{python}
+# Generate initial banding configuration with automatic quartiles + all categorical levels
+freq_config = generate_banding_config(
+    data=frequency_dataset,
+    numeric_vars=numeric_vars,
+    categorical_vars=categorical_vars,
+    weight_col='exposure',
+    n_quantiles=4
+)
+
+# Save to outputs/
+save_banding_config(freq_config, 'outputs/bands_freq.json')
+
+print("\n💡 Edit 'outputs/bands_freq.json' to customize bands:")
+print("   - Numeric: Change cutpoints (e.g., [25, 35, 50, 65])")
+print("   - Categorical: Group levels by nesting (e.g., [[\"Mercedes\"], [\"Toyota\", \"Ford\"]])")
+print("   - Then re-run the next chunk to apply changes")
+```
+
+#### Apply Frequency Banding Configuration
+
+```{python}
+# Load configuration from JSON (edit JSON file between runs)
+freq_config = load_banding_config('outputs/bands_freq.json')
+
+# Apply all bands at once - creates *_band columns for all variables
+frequency_dataset, freq_bands = apply_banding_config(frequency_dataset, freq_config)
+
+# Show summary
+banded_vars = [col for col in frequency_dataset.columns if col.endswith('_band')]
+print(f"\n✅ Frequency model: {len(freq_bands)} variables configured")
+print(f"📊 Banded columns: {banded_vars}")
+```
+
+#### Model Building
+
+```{python}
+# Build the frequency model formula
+# List banded risk variables explicitly (copy/paste into selections)
+risk_variables = ['province_band', 'body_type_band', 'vehicle_make_band', 'vehicle_color_band', 'vehicle_transmission_band', 'driver_age_band', 'vehicle_age_band', 'horsepower_band']
+
+# Select variables for the frequency model
+selected_vars_freq = []
+
+# Build GLM formula with highest-weight base levels
+freq_formula = build_glm_formula(
+    response_var='claim_counts',
+    risk_variables=selected_vars_freq,
+    data=frequency_dataset,
+    offset_col='exposure',
+    reference_level='highest_weight'
+)
+
+# Fit the model
+freq_model = smf.glm(
+    formula=freq_formula,
+    data=frequency_dataset,
+    family=sm.families.Poisson(),
+    offset=np.log(frequency_dataset['exposure'])
+).fit()
+
+print(freq_model.summary())
+```
+
+#### Variable Selection (LR Tests)
+
+```{python}
+# Test adding each available variable to the baseline model (banded variables)
+vars_to_test_freq = [v for v in risk_variables if v not in selected_vars_freq]
+
+if vars_to_test_freq:
+    print(f"Baseline model deviance: {freq_model.deviance:.2f}")
+    
+    # Use utility function to test all variables
+    lr_results_freq = compare_add_one_variable(
+        baseline_model=freq_model,
+        baseline_formula=freq_formula,
+        variables_to_test=vars_to_test_freq,
+        data=frequency_dataset,
+        family=sm.families.Poisson(),
+        offset=np.log(frequency_dataset['exposure'])
+    )
+    
+    if not lr_results_freq.empty:
+        print(f"\nLikelihood Ratio Tests - Adding single variables to baseline model:")
+        print(lr_results_freq.to_string(index=False))
+else:
+    print("\nAll variables already in model")
+```
+
+#### Model Relativities Table
+
+```{python}
+# Extract relativities table and base levels using utility function
+freq_relativities_df, freq_base_levels = extract_relativities_table(freq_model, selected_vars_freq, frequency_dataset)
+
+# For later use in charts
+frequency_relativities = np.exp(freq_model.params)
+ci_lower = np.exp(freq_model.conf_int()[0])
+ci_upper = np.exp(freq_model.conf_int()[1])
+
+# Display the relativities table
+print("Frequency Model Relativities (exp(β)):")
+print(freq_relativities_df.round(3).to_string())
+
+# Display base levels
+if freq_base_levels:
+    print("\nBase levels (Relativity = 1.0):")
+    for var, level in freq_base_levels.items():
+        print(f"  {var}: {level}")
+```
+
+#### Relativity Visualization
+
+```{python}
+# Select a variable to visualize relativities
+if selected_vars_freq:
+    freq_relativity_var = selected_vars_freq[0]
+
+    print(f"Displaying frequency relativities for: {freq_relativity_var}")
+
+    # Get base level for this variable if it exists
+    freq_base_level_for_var = freq_base_levels.get(freq_relativity_var, None)
+
+    relativities_chart(frequency_relativities, ci_lower, ci_upper, freq_relativity_var, freq_base_level_for_var).show()
+else:
+    print("ℹ️ No variables selected for frequency model - no relativities to display")
+```
+
+#### Predictions
+
+```{python}
+# Calculate predictions from the fitted model
+# Two versions needed:
+# 1. With offset: predicted COUNTS (for aggregation/observed vs predicted)
+frequency_dataset['predicted_counts'] = freq_model.predict(
+    frequency_dataset,
+    offset=np.log(frequency_dataset['exposure'])
+)
+
+# 2. Without offset: predicted FREQUENCY RATE (for consolidation GLM)
+frequency_dataset['predicted_frequency'] = freq_model.predict(frequency_dataset)
+
+# Show sample of observed vs predicted
+print("Sample of observed vs predicted claim counts:")
+frequency_dataset[['policy_id', 'claim_counts', 'predicted_counts', 'predicted_frequency']].head()
+```
+
+#### Observed vs Predicted
+
+```{python}
+# List all rating variables explicitly (both categorical and numeric, no bands)
+obs_pred_vars = ['province', 'body_type', 'vehicle_make', 'vehicle_color', 'vehicle_transmission', 'driver_age', 'vehicle_age', 'horsepower']
+
+# Select a variable for comparison (independent from relativities section)
+selected_obs_pred_var = obs_pred_vars[5]  # Change index to select different variable
+print(f"Comparing observed vs predicted for: {selected_obs_pred_var}")
+
+# Calculate observed vs predicted rates for the selected variable
+# Use predicted_counts (with offset) for proper aggregation
+comparison_df = calculate_observed_vs_predicted(
+    frequency_dataset,
+    selected_obs_pred_var,
+    'claim_counts',
+    'predicted_counts',
+    'exposure'
+)
+
+# Display the comparison chart
+observed_vs_predicted_chart(comparison_df, selected_obs_pred_var, 'Exposure').show()
+```
+
+### Severity GLM
+
+#### Data Preparation
+
+```{python}
+# Prepare severity dataset (only policies with claims)
+severity_dataset = df[df['claim_counts'] > 0].copy()
+print(f"Severity dataset: {len(severity_dataset):,} policies")
+
+# Identify numeric variables for potential banding
+numeric_vars = rating_vars['numeric']
+categorical_vars = rating_vars['categorical']
+print(f"\nNumeric variables: {numeric_vars}")
+print(f"Categorical variables: {categorical_vars}")
+```
+
+#### Generate Severity Banding Configuration
+
+```{python}
+# Generate initial banding configuration with automatic quartiles + all categorical levels
+# Note: Uses claim_counts as weight (different from frequency)
+sev_config = generate_banding_config(
+    data=severity_dataset,
+    numeric_vars=numeric_vars,
+    categorical_vars=categorical_vars,
+    weight_col='claim_counts',
+    n_quantiles=4
+)
+
+# Save to outputs/
+save_banding_config(sev_config, 'outputs/bands_sev.json')
+
+print("\n💡 Edit 'outputs/bands_sev.json' to customize bands:")
+print("   - Numeric: Change cutpoints (e.g., [25, 35, 50, 65])")
+print("   - Categorical: Group levels by nesting (e.g., [[\"Mercedes\"], [\"Toyota\", \"Ford\"]])")
+print("   - Then re-run the next chunk to apply changes")
+```
+
+#### Apply Severity Banding Configuration
+
+```{python}
+# Load configuration from JSON (edit JSON file between runs)
+sev_config = load_banding_config('outputs/bands_sev.json')
+
+# Apply all bands at once - creates *_band columns for all variables
+severity_dataset, sev_bands = apply_banding_config(severity_dataset, sev_config)
+
+# Show summary
+banded_vars = [col for col in severity_dataset.columns if col.endswith('_band')]
+print(f"\n✅ Severity model: {len(sev_bands)} variables configured")
+print(f"📊 Banded columns: {banded_vars}")
+```
+
+#### Model Building
+
+```{python}
+# Build the severity model formula
+# List banded risk variables explicitly (copy/paste into selections)
+risk_variables = ['province_band', 'body_type_band', 'vehicle_make_band', 'vehicle_color_band', 'vehicle_transmission_band', 'driver_age_band', 'vehicle_age_band', 'horsepower_band']
+
+# Select variables for the severity model
+selected_vars_sev = []
+
+# Build GLM formula with highest-weight base levels
+sev_formula = build_glm_formula(
+    response_var='loss_amt',
+    risk_variables=selected_vars_sev,
+    data=severity_dataset,
+    offset_col='claim_counts',
+    reference_level='highest_weight'
+)
+
+# Fit the model
+sev_model = smf.glm(
+    formula=sev_formula,
+    data=severity_dataset,
+    family=sm.families.Gamma(link=sm.families.links.log()),
+    offset=np.log(severity_dataset['claim_counts'])
+).fit()
+
+print(sev_model.summary())
+```
+
+#### Variable Selection (LR Tests)
+
+```{python}
+# Test adding each available variable to the baseline model
+vars_to_test_sev = [v for v in risk_variables if v not in selected_vars_sev]
+
+if vars_to_test_sev:
+    print(f"Baseline model deviance: {sev_model.deviance:.2f}")
+    
+    # Use utility function to test all variables
+    sev_lr_results = compare_add_one_variable(
+        baseline_model=sev_model,
+        baseline_formula=sev_formula,
+        variables_to_test=vars_to_test_sev,
+        data=severity_dataset,
+        family=sm.families.Gamma(link=sm.families.links.log()),
+        offset=np.log(severity_dataset['claim_counts'])
+    )
+    
+    if not sev_lr_results.empty:
+        print(f"\nLikelihood Ratio Tests - Adding single variables to baseline model:")
+        print(sev_lr_results.to_string(index=False))
+else:
+    print("\nAll variables already in model")
+```
+
+#### Model Relativities Table
+
+```{python}
+# Extract relativities table and base levels using utility function
+sev_relativities_df, sev_base_levels = extract_relativities_table(sev_model, selected_vars_sev, severity_dataset)
+
+# For later use in charts
+severity_relativities = np.exp(sev_model.params)
+sev_ci_lower = np.exp(sev_model.conf_int()[0])
+sev_ci_upper = np.exp(sev_model.conf_int()[1])
+
+# Display the relativities table
+print("Severity Model Relativities (exp(β)):")
+print(sev_relativities_df.round(3).to_string())
+
+# Display base levels
+if sev_base_levels:
+    print("\nBase levels (Relativity = 1.0):")
+    for var, level in sev_base_levels.items():
+        print(f"  {var}: {level}")
+```
+
+#### Relativity Visualization
+
+```{python}
+# Select a variable to visualize relativities
+if selected_vars_sev:
+    # Use first variable if available, or second if you prefer a different one
+    sev_relativity_var = selected_vars_sev[min(1, len(selected_vars_sev) - 1)]
+
+    print(f"Displaying severity relativities for: {sev_relativity_var}")
+    # Get base level for this variable if it exists
+    sev_base_level_for_var = sev_base_levels.get(sev_relativity_var, None)
+    relativities_chart(severity_relativities, sev_ci_lower, sev_ci_upper, sev_relativity_var, sev_base_level_for_var).show()
+else:
+    print("ℹ️ No variables selected for severity model - no relativities to display")
+```
+
+#### Predictions
+
+```{python}
+# Calculate predictions from the fitted model
+# Two versions needed:
+# 1. With offset: predicted TOTAL COST (for aggregation/observed vs predicted)
+severity_dataset['predicted_total_cost'] = sev_model.predict(
+    severity_dataset,
+    offset=np.log(severity_dataset['claim_counts'])
+)
+
+# 2. Without offset: predicted SEVERITY RATE (for consolidation GLM)
+severity_dataset['predicted_severity'] = sev_model.predict(severity_dataset)
+
+# Show sample of observed vs predicted
+print("Sample of observed vs predicted loss amounts:")
+severity_dataset[['policy_id', 'loss_amt', 'predicted_total_cost', 'predicted_severity']].head()
+```
+
+#### Observed vs Predicted
+
+```{python}
+# List all rating variables explicitly (both categorical and numeric, no bands)
+obs_pred_vars = ['province', 'body_type', 'vehicle_make', 'vehicle_color', 'vehicle_transmission', 'driver_age', 'vehicle_age', 'horsepower']
+
+# Select a variable for comparison (independent from relativities section)
+selected_obs_pred_var = obs_pred_vars[0]  # Change index to select different variable
+print(f"Comparing observed vs predicted for: {selected_obs_pred_var}")
+
+# Calculate observed vs predicted rates for the selected variable
+# Use predicted_total_cost (with offset) for proper aggregation
+sev_comparison_df = calculate_observed_vs_predicted(
+    severity_dataset,
+    selected_obs_pred_var,
+    'loss_amt',
+    'predicted_total_cost',
+    'claim_counts'
+)
+
+# Display the comparison chart
+observed_vs_predicted_chart(sev_comparison_df, selected_obs_pred_var, 'Claim Counts').show()
+```
+
+### Prepare Dataset for Severity Prediction
+
+```{python}
+# Copy frequency dataset and remove frequency bands to avoid conflicts
+# This ensures we apply severity bands cleanly to raw numeric variables
+df_for_severity = frequency_dataset.copy()
+
+# Remove frequency band columns to avoid conflicts
+freq_band_cols = [col for col in df_for_severity.columns if col.endswith('_band')]
+print(f"🗑️ Removing frequency band columns: {freq_band_cols}")
+df_for_severity = df_for_severity.drop(columns=freq_band_cols)
+
+# Apply severity bands to raw numeric variables ONLY
+# Categorical variables don't need banding - they're stored in sev_bands but used as-is
+numeric_vars = ['driver_age', 'vehicle_age', 'horsepower']
+
+for var in numeric_vars:
+    if var in sev_bands and var in df_for_severity.columns:
+        bands = sev_bands[var]
+        # Check if bands is a dict of tuples (numeric banding) not a dict of lists (categorical grouping)
+        if bands and isinstance(list(bands.values())[0], tuple):
+            band_col_name = f'{var}_band'
+            df_for_severity[band_col_name] = apply_bands(df_for_severity[var], bands)
+            print(f"✅ Applied severity bands to {var} -> {band_col_name}")
+
+print(f"📊 Severity dataset ready with {len([col for col in df_for_severity.columns if col.endswith('_band')])} band columns")
+```
+
+## Consolidation GLM
+
+### Pure Premium Calculation
+
+```{python}
+# Use the cleaned dataset with severity bands (from previous step)
+df = df_for_severity.copy()
+
+# Predict severity using the dataset with proper severity bands
+# Add both versions (similar to frequency model):
+# 1. With offset: total cost (for validation/diagnostics)
+df['predicted_total_cost'] = sev_model.predict(
+    df,
+    offset=np.log(df['claim_counts'])
+)
+
+# 2. Without offset: severity RATE (for pure premium calculation)
+df['predicted_severity'] = sev_model.predict(df)
+
+# Combined pure premium = frequency RATE × severity RATE
+# Both are annual rates, so product is also annual rate
+df['predicted_pure_premium'] = df['predicted_frequency'] * df['predicted_severity']
+
+print(f"Pure premium calculation completed - Mean pure premium: ${df['predicted_pure_premium'].mean():.2f}")
+
+# Show sample of predictions
+sample_cols = ['policy_id', 'predicted_frequency', 'predicted_severity', 'predicted_pure_premium', 'exposure']
+df[sample_cols].head()
+```
+
+### Validation
+
+```{python}
+# Portfolio-level validation: Compare observed vs predicted pure premium
+observed_pure_premium = df['loss_amt'].sum() / df['exposure'].sum()
+predicted_pure_premium = df['predicted_pure_premium'].sum() / df['policy_id'].count()
+
+print("Portfolio Pure Premium Validation:")
+print(f"Observed Pure Premium:  ${observed_pure_premium:.2f}")
+print(f"Predicted Pure Premium: ${predicted_pure_premium:.2f}")
+```
+
+### Variable Union and Band Consolidation
+
+#### Generate Consolidated Banding Configuration
+
+```{python}
+# Filter bands to only include SELECTED variables (remove _band suffix to match band dict keys)
+selected_base_vars_freq = [v.replace('_band', '') for v in selected_vars_freq]
+selected_base_vars_sev = [v.replace('_band', '') for v in selected_vars_sev]
+
+# Create filtered band dictionaries containing only selected variables
+selected_freq_bands = {var: freq_bands[var] for var in selected_base_vars_freq if var in freq_bands}
+selected_sev_bands = {var: sev_bands[var] for var in selected_base_vars_sev if var in sev_bands}
+
+# Create consolidated configuration from SELECTED bands only (not all bands!)
+consolidated_config = create_consolidated_config(selected_freq_bands, selected_sev_bands)
+
+# Save for review and potential manual adjustment
+save_banding_config(consolidated_config, 'outputs/bands_consolidated.json')
+
+print(f"\n💡 Consolidated config: {len(consolidated_config)} variables (from {len(selected_vars_freq)} freq + {len(selected_vars_sev)} sev)")
+print("   - Review 'outputs/bands_consolidated.json' to see selected variable bands")
+print("   - Edit if you want different consolidation logic")
+print("   - Then re-run the next chunk to apply")
+```
+
+#### Apply Consolidated Banding Configuration
+
+```{python}
+# Load consolidated configuration (allows final manual adjustments)
+consolidated_config = load_banding_config('outputs/bands_consolidated.json')
+
+# Apply consolidated bands to full dataset
+df, consolidated_bands = apply_banding_config(df, consolidated_config)
+
+# Get union of SELECTED variables from freq and sev models (not all from consolidated_config)
+all_selected_vars = list(set(selected_vars_freq) | set(selected_vars_sev))
+
+print(f"\n✅ Consolidated model: {len(all_selected_vars)} variables (union of freq + sev)")
+print(f"📊 Freq selected: {selected_vars_freq}")
+print(f"📊 Sev selected: {selected_vars_sev}")
+print(f"📊 Consolidated variables: {all_selected_vars}")
+```
+
+### Consolidated Premium Relativities
+
+```{python}
+# Build consolidation GLM formula with highest-weight base levels
+consolidation_formula = build_glm_formula(
+    response_var='predicted_pure_premium',
+    risk_variables=all_selected_vars,
+    data=df,
+    offset_col='exposure',
+    reference_level='highest_weight'
+)
+
+consolidation_model = smf.glm(
+    formula=consolidation_formula,
+    data=df,
+    family=sm.families.Poisson(),
+    var_weights=df['exposure']  # Use weights (not offset) since response is already a RATE
+).fit()
+
+# Convert GLM to rating structure JSON format
+rating_structure = glm_to_rating_structure(consolidation_model, all_selected_vars, df)
+
+# Flatten grouped nominal factors to per-level for competition scoring
+rating_structure_flat = flatten_nominal_relativities(rating_structure, consolidated_bands)
+
+# Display the rating structure
+print("Consolidation GLM Rating Structure:")
+print(json.dumps(rating_structure_flat, indent=2))
+
+# Validate the rating structure format
+validation = validate_rating_structure(rating_structure_flat)
+print("\nRating Structure Validation:")
+validation
+
+# Validate calculation consistency
+calculation_validation = validate_glm_calculation(consolidation_model, df, rating_structure_flat)
+print(f"\nCalculation Validation:")
+print(calculation_validation)
+
+# Save rating structure to outputs/solution/ directory
+solution_dir = 'solution'
+os.makedirs(solution_dir, exist_ok=True)
+rating_structure_path = f'{solution_dir}/player_{player_num}.json'
+
+with open(rating_structure_path, 'w') as f:
+    json.dump(rating_structure_flat, f, indent=2)
+
+print(f"\n✅ Rating structure saved to: {rating_structure_path}")
+print(f"📁 Player {player_num} solution ready for submission")
+```
+
+### Consolidation GLM Validation
+
+```{python}
+# Compare all three pure premium calculations
+observed_pure_premium = df['loss_amt'].sum() / df['exposure'].sum()
+predicted_pure_premium = df['predicted_pure_premium'].sum() / df['policy_id'].count()
+# Don't pass offset - model fitted with weights, predict returns annual RATE
+consolidated_pure_premium = consolidation_model.predict(df).sum() / df['policy_id'].count()
+avg_commercial_premium = df['commercial_premium'].sum() / df['policy_id'].count()
+
+print(f"Average Commercial Premium: ${avg_commercial_premium:.2f}")
+print(f"Observed Pure Premium:     ${observed_pure_premium:.2f}")
+print(f"Consolidated Pure Premium: ${consolidated_pure_premium:.2f}")
+
+```
+
+### Impact Analysis
+
+```{python}
+# Load the saved rating structure for impact analysis
+new_rating_structure = parse_json(rating_structure_path)
+
+# Create inforce dataset (remove historical cancellations)
+df_inforce = df[df['in_force'] == True].copy()
+
+print(f"Dataset: {len(df):,} total policies, {len(df_inforce):,} inforce policies")
+
+# Score the inforce dataset using the new rating structure
+df_inforce['new_comm_premium'] = calculate_means_with_factors(df_inforce, new_rating_structure)
+
+# Calculate premium changes
+df_inforce['premium_delta'] = ((df_inforce['new_comm_premium'] / df_inforce['commercial_premium']) - 1.0) * 100
+
+# Calculate retention probabilities for impact analysis
+df_inforce['retention_prob'] = calculate_retention_probability(df_inforce)
+
+# Calculate summary statistics for display
+avg_commercial_premium = df_inforce['commercial_premium'].mean()
+observed_pure_premium = df_inforce['loss_amt'].sum() / df_inforce['exposure'].sum()
+consolidated_pure_premium = df_inforce['predicted_pure_premium'].mean() if 'predicted_pure_premium' in df_inforce.columns else 0
+new_commercial_premium = df_inforce['new_comm_premium'].mean()
+
+print(f"Average Commercial Premium: ${avg_commercial_premium:.2f}")
+print(f"Observed Pure Premium:     ${observed_pure_premium:.2f}")
+print(f"Consolidated Pure Premium: ${consolidated_pure_premium:.2f}")
+print(f"New Commercial Premium:    ${new_commercial_premium:.2f}")
+
+print(f"Overall Premium Change: {((df_inforce['new_comm_premium'].sum() / df_inforce['commercial_premium'].sum()) - 1.0) * 100:.1f}%")
+print(f"Expected Retention Rate: {(df_inforce['retention_prob'].sum() / len(df_inforce)) * 100:.1f}%")
+print(f"Expected Retained Policies: {df_inforce['retention_prob'].sum():.0f} of {len(df_inforce):.0f}")
+```
+
+#### Premium Delta Distribution
+
+```{python}
+# Create histogram using chart function
+fig = premium_delta_histogram(df_inforce)
+fig.show()
+```
+
+#### Retention Analysis by Variable
+
+```{python}
+# Use the same variables as in the GLM models (with banding)
+risk_variables = ['province', 'body_type', 'vehicle_make', 'vehicle_color', 'vehicle_transmission', 'driver_age_band', 'vehicle_age_band', 'horsepower_band']
+
+# Select variable for analysis (use banded variables like in GLM)
+analysis_variable = risk_variables[2]  # vehicle_make
+print(f"Analyzing retention by: {analysis_variable}")
+
+# Perform analysis and create chart
+retention_by_var = retention_analysis_by_variable(df_inforce, analysis_variable)
+fig = retention_analysis_chart(retention_by_var, analysis_variable)
+fig.show()
+```
+
+### Expected Profitability Analysis
+
+```{python}
+# Use the same variables as in the GLM models (with banding)
+risk_variables = ['province', 'body_type', 'vehicle_make', 'vehicle_color', 'vehicle_transmission', 'driver_age_band', 'vehicle_age_band', 'horsepower_band']
+
+# Select variable for analysis (use banded variables like in GLM)
+selected_var = risk_variables[0]
+print(f"Analyzing profitability by: {selected_var}")
+```
+
+```{python}
+# Prepare profitability data using wrapper function
+grouped = prepare_profitability_data(df_inforce, selected_var)
+
+# Create profitability comparison chart (old vs new loss ratios)
+fig = profitability_comparison_chart(grouped, selected_var)
+fig.show()
+```
+
+## Final Rating Structure
+
+The final rating structure has been saved and can be modified by players to test different pricing strategies.
+
+```{python}
+# Display the final rating structure (saved from Consolidation GLM)
+final_rating = parse_json(rating_structure_path)
+print("Final Rating Structure:")
+print(json.dumps(final_rating, indent=2))
+print(f"\n📝 Rating structure saved as: {rating_structure_path}")
+print(f"🔄 Player {player_num} solution ready for submission.")
+print(f"💡 To modify pricing strategy, edit the JSON file and re-run impact analysis.")
+```

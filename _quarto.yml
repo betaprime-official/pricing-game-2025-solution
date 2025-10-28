@@ -1,0 +1,17 @@
+project:
+  title: "Pricing Game Solution"
+  type: website
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-fold: false
+
+execute:
+  echo: false
+  warning: false
+  error: true
+  timeout: 120
+
+metadata-files: []
