@@ -132,6 +132,63 @@ def compare_add_one_variable(baseline_model, baseline_formula: str, variables_to
     return pd.DataFrame()
 
 
+def compare_add_one_variable_f_test(
+    baseline_model, baseline_formula, variables_to_test, data, family, offset=None
+):
+    import pandas as pd, numpy as np
+    import statsmodels.formula.api as smf
+    from scipy.stats import f as f_dist
+
+    results = []
+    baseline_deviance = baseline_model.deviance
+    baseline_df_resid = int(baseline_model.df_resid)
+
+    for var in variables_to_test:
+        # choose C(var) only for non-numeric
+        is_cat = (data[var].dtype.kind in "OUSb") or str(data[var].dtype).startswith("category")
+        term = f"C({var})" if is_cat else var
+        extended_formula = f"{baseline_formula} + {term}"
+
+        try:
+            extended_model = smf.glm(
+                formula=extended_formula,
+                data=data,
+                family=family,
+                offset=offset
+            ).fit()
+
+            df_num = int(baseline_df_resid - extended_model.df_resid)
+            if df_num <= 0:
+                results.append({'Variable': var, 'Deviance_Reduction': np.nan,
+                                'DF_Num': df_num, 'DF_Den': int(extended_model.df_resid),
+                                'F': np.nan, 'P_Value': np.nan})
+                continue
+
+            phi_hat = extended_model.pearson_chi2 / extended_model.df_resid
+            dev_drop = baseline_deviance - extended_model.deviance
+            F_stat = (dev_drop / df_num) / phi_hat
+            df_den = int(extended_model.df_resid)
+            p_value = 1.0 - f_dist.cdf(F_stat, df_num, df_den)
+
+            results.append({'Variable': var,
+                            'Deviance_Reduction': dev_drop,
+                            'DF_Num': df_num, 'DF_Den': df_den,
+                            'F': float(F_stat), 'P_Value': float(p_value)})
+        except Exception as e:
+            results.append({'Variable': var, 'Deviance_Reduction': np.nan,
+                            'DF_Num': np.nan, 'DF_Den': np.nan,
+                            'F': np.nan, 'P_Value': np.nan, 'Error': str(e)})
+
+    if results:
+        df_results = pd.DataFrame(results).sort_values('P_Value', na_position='first')
+        def fmt_p(p):
+            if pd.isna(p): return p
+            return f"{p:.4e}" if p < 1e-4 else f"{p:.4f}"
+        df_results['P_Value'] = df_results['P_Value'].apply(fmt_p)
+        return df_results
+
+    return pd.DataFrame()
+
 def calculate_observed_vs_predicted(data: pd.DataFrame, group_var: str, 
                                    observed_col: str, predicted_col: str, 
                                    offset_col: str) -> pd.DataFrame:

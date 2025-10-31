@@ -218,6 +218,34 @@ else:
     print("\nAll variables already in model")
 ```
 
+#### Variable Selection (F Tests)
+
+```{python}
+# Test adding each available variable to the baseline model
+
+vars_to_test_freq = [v for v in risk_variables if v not in selected_vars_freq]
+
+if vars_to_test_freq:
+    print(f"Baseline model deviance: {freq_model.deviance:.2f}")
+    
+    # Use utility function (F-nested tests) to test all variables
+    f_results_freq = compare_add_one_variable_f_test(
+        baseline_model=freq_model,
+        baseline_formula=freq_formula,
+        variables_to_test=vars_to_test_freq,
+        data=frequency_dataset,
+        family=sm.families.Poisson(),  # or Tweedie/Gaussian if you estimate dispersion
+        offset=np.log(frequency_dataset['exposure'])
+    )
+    
+    if not f_results_freq.empty:
+        print("\nF Tests - Adding single variables to baseline model:")
+        print(f_results_freq.to_string(index=False))
+else:
+    print("\nAll variables already in model")
+```
+
+
 #### Model Relativities Table
 
 ```{python}
@@ -408,6 +436,35 @@ if vars_to_test_sev:
 else:
     print("\nAll variables already in model")
 ```
+
+
+#### Variable Selection (F Tests)
+
+```{python}
+# Test adding each available variable to the baseline severity model
+vars_to_test_sev = [v for v in risk_variables if v not in selected_vars_sev]
+
+if vars_to_test_sev:
+    print(f"Baseline model deviance: {sev_model.deviance:.2f}")
+
+
+    # Use the F-test helper analogous to the LR version
+    sev_f_results = compare_add_one_variable_f_test(
+        baseline_model=sev_model,
+        baseline_formula=sev_formula,
+        variables_to_test=vars_to_test_sev,
+        data=severity_dataset,
+        family=sm.families.Gamma(link=sm.families.links.log()),
+        offset=np.log(severity_dataset['claim_counts'])
+    )
+
+    if not sev_f_results.empty:
+        print("\nF Tests - Adding single variables to baseline severity model:")
+        print(sev_f_results.to_string(index=False))
+else:
+    print("\nAll variables already in model")
+```
+
 
 #### Model Relativities Table
 
