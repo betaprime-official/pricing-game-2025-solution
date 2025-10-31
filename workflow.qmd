@@ -20,7 +20,7 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from pg_utils.methods import identify_player_number, parse_json, calculate_means_with_factors, validate_rating_structure, aggregate_by_group, calculate_loss_ratio, get_rating_variables, glm_to_rating_structure, calculate_retention_probability, retention_analysis_by_variable, prepare_profitability_data, calculate_metrics, portfolio_summary, validate_glm_calculation, flatten_nominal_relativities
 from pg_utils.charts import loss_ratio_chart, pure_premium_chart, frequency_chart, severity_chart, relativities_chart, rating_relativities_chart, observed_vs_predicted_chart, premium_delta_histogram, retention_analysis_chart, profitability_comparison_chart
-from pg_utils.glm_utils import compare_lr_test_glm, apply_bands, compare_add_one_variable, calculate_observed_vs_predicted, extract_relativities_table, build_glm_formula, generate_banding_config, apply_banding_config, save_banding_config, load_banding_config, create_consolidated_config
+from pg_utils.glm_utils import compare_lr_test_glm, apply_bands, compare_add_one_variable, compare_add_one_variable_f_test, calculate_observed_vs_predicted, extract_relativities_table, build_glm_formula, generate_banding_config, apply_banding_config, save_banding_config, load_banding_config, create_consolidated_config
 
 # Set pandas display options for European formatting
 pd.options.display.float_format = lambda x: f'{x:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')

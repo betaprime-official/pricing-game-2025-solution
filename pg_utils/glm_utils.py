@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
 from scipy import stats
+from scipy.stats import f as f_dist
 from typing import Dict, Tuple, List
+import statsmodels.formula.api as smf
 
 
 def compare_lr_test_glm(model_unrestricted, model_restricted):
@@ -89,8 +91,6 @@ def compare_add_one_variable(baseline_model, baseline_formula: str, variables_to
     Returns:
         DataFrame with variables sorted by significance
     """
-    import statsmodels.formula.api as smf
-    
     results = []
     baseline_deviance = baseline_model.deviance
     
@@ -135,10 +135,6 @@ def compare_add_one_variable(baseline_model, baseline_formula: str, variables_to
 def compare_add_one_variable_f_test(
     baseline_model, baseline_formula, variables_to_test, data, family, offset=None
 ):
-    import pandas as pd, numpy as np
-    import statsmodels.formula.api as smf
-    from scipy.stats import f as f_dist
-
     results = []
     baseline_deviance = baseline_model.deviance
     baseline_df_resid = int(baseline_model.df_resid)
