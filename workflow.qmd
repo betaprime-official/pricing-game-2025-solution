@@ -733,13 +733,23 @@ print(f"Consolidated Pure Premium: ${consolidated_pure_premium:.2f}")
 # Load the saved rating structure for impact analysis
 new_rating_structure = parse_json(rating_structure_path)
 
+# Load price caps configuration if available
+price_caps_config = None
+price_caps_path = 'files/price_caps.json'
+if os.path.exists(price_caps_path):
+    with open(price_caps_path, 'r') as f:
+        price_caps_config = json.load(f)
+    print(f"✅ Loaded price caps from {price_caps_path}")
+else:
+    print(f"ℹ️  No price caps found (not used in this game)")
+
 # Create inforce dataset (remove historical cancellations)
 df_inforce = df[df['in_force'] == True].copy()
 
 print(f"Dataset: {len(df):,} total policies, {len(df_inforce):,} inforce policies")
 
 # Score the inforce dataset using the new rating structure
-df_inforce['new_comm_premium'] = calculate_means_with_factors(df_inforce, new_rating_structure)
+df_inforce['new_comm_premium'] = calculate_means_with_factors(df_inforce, new_rating_structure, price_caps_config=price_caps_config)
 
 # Calculate premium changes
 df_inforce['premium_delta'] = ((df_inforce['new_comm_premium'] / df_inforce['commercial_premium']) - 1.0) * 100

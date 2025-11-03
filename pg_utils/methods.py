@@ -1,4 +1,4 @@
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, Tuple, List, Optional
 import json
 import math
 import glob
@@ -89,10 +89,20 @@ def get_band_factor(value, var_name: str, factor_table: Dict) -> float:
     return base_factor if base_factor is not None else 1.0
 
 
-def calculate_means_with_factors(df: pd.DataFrame, factor_tables: Dict, base_value_key: str = 'value') -> pd.Series:
+def calculate_means_with_factors(df: pd.DataFrame, factor_tables: Dict, base_value_key: str = 'value', price_caps_config: Optional[Dict] = None) -> pd.Series:
     """
     Calculate means using factor tables with relativities format.
     Supports both raw variables and their banded counterparts (e.g., province vs province_band).
+
+    Args:
+        df: DataFrame with policy data
+        factor_tables: Dictionary with base_values and relativities
+        base_value_key: Key to access base value
+        price_caps_config: Optional dict with price caps. Structure: {"caps": {variable: {group: [min, max]}}}
+                          Caps are applied sequentially for each variable.
+
+    Returns:
+        Series with calculated mean values
     """
     # Use relativities format directly
     relativities = factor_tables['relativities']
@@ -107,7 +117,7 @@ def calculate_means_with_factors(df: pd.DataFrame, factor_tables: Dict, base_val
             if band_col in df.columns:
                 variable_column_map[var_name] = band_col
     base_value = float(factor_tables.get('base_values', {}).get(base_value_key, 1.0))
-    
+
     def row_mean(row) -> float:
         product = 1.0
         for var_name, col_name in variable_column_map.items():
@@ -116,6 +126,23 @@ def calculate_means_with_factors(df: pd.DataFrame, factor_tables: Dict, base_val
 
     mean_series = df.apply(row_mean, axis=1)
     mean_series.name = 'mean_value'
+
+    # Apply price caps sequentially for each variable (vectorized per group)
+    if price_caps_config is not None and 'caps' in price_caps_config:
+        caps = price_caps_config['caps']
+        for var_name, var_caps in caps.items():
+            if var_name in df.columns:
+                for group_value, (min_cap, max_cap) in var_caps.items():
+                    mask = df[var_name] == group_value
+
+                    # Apply min cap
+                    if min_cap is not None:
+                        mean_series.loc[mask] = mean_series.loc[mask].clip(lower=min_cap)
+
+                    # Apply max cap
+                    if max_cap is not None:
+                        mean_series.loc[mask] = mean_series.loc[mask].clip(upper=max_cap)
+
     return mean_series
 
 

@@ -84,6 +84,7 @@ There are some test files in the `files/` directory. For the actual Pricing Game
 1. **Loss Data**: Place `p{N}_loss_data.csv` in the `files/` directory
 2. **Rating Structure**: Place `p{N}_rating_structure.json` in the `files/` directory
 3. **Retention Model**: You must have the file `retention.json` already in the directory
+4. **Price Caps**: Optional `price_caps.json` file (if used in the competition)
 
 Where `{N}` is your player number.
 
@@ -99,7 +100,8 @@ pricing-game-solution/
 ├── files/                 # 📥 Input directory
 │   ├── p{N}_loss_data.csv          # Your loss data (place here)
 │   ├── p{N}_rating_structure.json  # Initial rating structure (place here)
-│   └── retention.json              # Retention model parameters
+│   ├── retention.json              # Retention model parameters
+│   └── price_caps.json             # Price caps
 │
 ├── solution/              # 📤 Output directory
 │   └── player_{N}.json    # Your final solution (generated)
@@ -133,6 +135,7 @@ The `workflow.qmd` file is your main workspace. It guides you through:
 - Reads `p{N}_loss_data.csv` containing historical claims and exposures
 - Loads `p{N}_rating_structure.json` with rating factors and base rates
 - Loads `retention.json` with retention model parameters (logistic regression model with age adjustments)
+- Loads `price_caps.json` if present (price caps applied during competition)
 - Validates data integrity and displays key statistics
 
 ### 2. **Exploratory Analysis**
@@ -151,17 +154,17 @@ The `workflow.qmd` file is your main workspace. It guides you through:
 
 ### 4. **Multivariate Analysis**
 
-- Variable selection tools
+- Variable selection tools for GLMs
 - Band optimization utilities
 - Cross-validation of rating factors
-- Interaction effects analysis
+- Consolidated model
 
-### 5. **Retention Modeling**
+### 5. **Impact Analysis**
 
-- Re-score portfolio with new rates
+- Re-score portfolio with new rates (applying price caps if configured)
 - Calculate premium changes (delta%)
-- Project retention impacts
-- Optimize for profitability vs. retention
+- Project retention impacts using the retention model
+- Optimize for profitability vs. retention trade-offs
 
 ### 6. **Solution Export**
 
