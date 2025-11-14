@@ -559,18 +559,8 @@ freq_band_cols = [col for col in df_for_severity.columns if col.endswith('_band'
 print(f"🗑️ Removing frequency band columns: {freq_band_cols}")
 df_for_severity = df_for_severity.drop(columns=freq_band_cols)
 
-# Apply severity bands to raw numeric variables ONLY
-# Categorical variables don't need banding - they're stored in sev_bands but used as-is
-numeric_vars = ['driver_age', 'vehicle_age', 'horsepower']
-
-for var in numeric_vars:
-    if var in sev_bands and var in df_for_severity.columns:
-        bands = sev_bands[var]
-        # Check if bands is a dict of tuples (numeric banding) not a dict of lists (categorical grouping)
-        if bands and isinstance(list(bands.values())[0], tuple):
-            band_col_name = f'{var}_band'
-            df_for_severity[band_col_name] = apply_bands(df_for_severity[var], bands)
-            print(f"✅ Applied severity bands to {var} -> {band_col_name}")
+# Apply banding
+df_for_severity, _ = apply_banding_config(df_for_severity, sev_config)
 
 print(f"📊 Severity dataset ready with {len([col for col in df_for_severity.columns if col.endswith('_band')])} band columns")
 ```
