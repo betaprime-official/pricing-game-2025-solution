@@ -1,0 +1,39 @@
+{
+  "base_values": {
+    "value": 209.46
+  },
+  "relativities": {
+    "body_type": {
+      "sedan": 1.0,
+      "4x4": 2.7294,
+      "heavycomm": 1.8389,
+      "lightcomm": 1.619,
+      "pickup": 1.681
+    },
+    "province": {
+      "RI": 1.0,
+      "AS": 1.3453,
+      "BA": 0.7362,
+      "HA": 1.7874,
+      "HS": 0.9903,
+      "JF": 0.9649,
+      "JZ": 1.0043,
+      "MD": 1.7714,
+      "MK": 1.6244,
+      "NJ": 1.3151,
+      "QS": 1.7502,
+      "SH": 1.4295
+    },
+    "vehicle_make": {
+      "other": 1.0,
+      "Chevrolet": 1.2223,
+      "Ford": 0.9753,
+      "Hyundai": 0.8911,
+      "Isuzu": 1.5295,
+      "KIA": 1.1945,
+      "Mercedes": 2.6318,
+      "Toyota": 0.8834
+    }
+  },
+  "base_group": "body_type: sedan, province: RI, vehicle_make: other"
+}

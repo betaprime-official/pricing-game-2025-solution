@@ -1,0 +1,32 @@
+{
+  "model": {
+    "link": "logit",
+    "intercept": 2.07944154,
+    "coeffs": {
+      "delta_premium_centered": -6.93147181
+    },
+    "transform": {
+      "delta_center": 1.0
+    },
+    "age_bands": {
+      "driver_age": {
+        "18-24": -0.4,
+        "25-34": -0.2,
+        "35-49": 0.0,
+        "50-64": 0.1,
+        "65-inf": -0.1
+      }
+    }
+  },
+  "notes": "P(delta=1.10)=0.80, P(delta=1.30)=0.50 with centered delta; age adjustments additive on logit scale.",
+  "calibration": {
+    "anchors": {
+      "delta1": 1.1,
+      "p1": 0.8,
+      "delta2": 1.3,
+      "p2": 0.5,
+      "delta_center": 1.0,
+      "age_offset": 0.0
+    }
+  }
+}

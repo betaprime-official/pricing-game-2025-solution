@@ -1,0 +1,36 @@
+{
+  "base_values": {
+    "value": 326.44
+  },
+  "relativities": {
+    "province": {
+      "RI": 1.0,
+      "AS": 1.7367,
+      "BA": 0.8207,
+      "HA": 1.6627,
+      "HS": 1.5723,
+      "JF": 1.5034,
+      "JZ": 1.5492,
+      "MD": 1.4952,
+      "MK": 1.5706,
+      "NJ": 1.291,
+      "QS": 1.9427,
+      "SH": 1.3596
+    },
+    "vehicle_transmission": {
+      "automatic": 1.0,
+      "manual": 1.0967
+    },
+    "vehicle_make": {
+      "other": 1.0,
+      "Chevrolet": 1.2914,
+      "Ford": 1.1259,
+      "Hyundai": 0.9508,
+      "Isuzu": 1.7864,
+      "KIA": 1.1349,
+      "Mercedes": 2.5399,
+      "Toyota": 0.7772
+    }
+  },
+  "base_group": "province: RI, vehicle_make: other, vehicle_transmission: automatic"
+}

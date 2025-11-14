@@ -1,0 +1,12 @@
+{
+  "caps": {
+    "body_type": {
+      "sedan": [280, null],
+      "pickup": [350, null],
+      "lightcomm": [400, null],
+      "heavycomm": [450, null],
+      "4x4": [500, null]
+    }
+  },
+  "description": "Minimum price caps by body type to prevent extreme underpricing."
+}

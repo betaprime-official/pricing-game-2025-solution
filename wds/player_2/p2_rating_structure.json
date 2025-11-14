@@ -1,0 +1,34 @@
+{
+  "base_values": {
+    "value": 222.76
+  },
+  "relativities": {
+    "vehicle_make": {
+      "other": 1.0,
+      "Chevrolet": 1.1346,
+      "Ford": 0.964,
+      "Hyundai": 0.7793,
+      "Isuzu": 1.4628,
+      "KIA": 1.1258,
+      "Mercedes": 1.4314,
+      "Toyota": 0.7658
+    },
+    "body_type": {
+      "sedan": 1.0,
+      "4x4": 2.4442,
+      "heavycomm": 1.8341,
+      "lightcomm": 1.794,
+      "pickup": 1.3384
+    },
+    "vehicle_color": {
+      "white": 1.0,
+      "black": 1.4559,
+      "blue": 1.8212,
+      "grey": 1.2772,
+      "other": 1.6238,
+      "red": 2.6124,
+      "silver": 1.1878
+    }
+  },
+  "base_group": "body_type: sedan, vehicle_color: white, vehicle_make: other"
+}

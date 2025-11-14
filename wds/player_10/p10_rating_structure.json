@@ -1,0 +1,31 @@
+{
+  "base_values": {
+    "value": 341.05
+  },
+  "relativities": {
+    "vehicle_transmission": {
+      "automatic": 1.0,
+      "manual": 1.2516
+    },
+    "vehicle_color": {
+      "white": 1.0,
+      "black": 1.186,
+      "blue": 1.9173,
+      "grey": 1.4412,
+      "other": 1.3732,
+      "red": 1.9471,
+      "silver": 1.107
+    },
+    "vehicle_make": {
+      "other": 1.0,
+      "Chevrolet": 1.2002,
+      "Ford": 0.9659,
+      "Hyundai": 0.9849,
+      "Isuzu": 1.3259,
+      "KIA": 1.2688,
+      "Mercedes": 2.5898,
+      "Toyota": 0.6227
+    }
+  },
+  "base_group": "vehicle_color: white, vehicle_make: other, vehicle_transmission: automatic"
+}

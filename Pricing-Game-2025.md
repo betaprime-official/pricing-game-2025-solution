@@ -17,7 +17,28 @@ Game structure:
 
 ## Market Report
 
-(to be filled the day of the competition)
+This table shows the baseline position of each player entering the competition. Market share reflects **in-force policies** (current portfolio), while loss ratio shows **previous year performance** (full portfolio including cancelled policies).
+
+| Player | Policies In-Force | Avg Earned | Pure Premium | Market Share | Loss Ratio | LR vs Market |
+|-------:|------------------:|-----------:|-------------:|-------------:|-----------:|-------------:|
+| 1 | 31,014 | $527.52 | $581.58 | 11.5% | 104.9% | -0.3pp |
+| 2 | 27,225 | $505.36 | $579.48 | 10.1% | 108.8% | +3.6pp |
+| 3 | 27,862 | $527.80 | $595.44 | 10.3% | 107.2% | +2.0pp |
+| 4 | 30,103 | $525.23 | $578.60 | 11.1% | 104.7% | -0.5pp |
+| 5 | 29,248 | $545.23 | $585.83 | 10.8% | 102.2% | -3.0pp |
+| 6 | 28,567 | $531.23 | $590.19 | 10.6% | 105.5% | +0.3pp |
+| 7 | 25,959 | $502.52 | $550.84 | 9.6% | 104.1% | -1.1pp |
+| 8 | 24,309 | $568.29 | $615.74 | 9.0% | 102.9% | -2.3pp |
+| 9 | 28,039 | $493.62 | $547.71 | 10.4% | 105.5% | +0.3pp |
+| 10 | 17,867 | $516.29 | $583.53 | 6.6% | 107.4% | +2.2pp |
+
+**Market Summary:**
+- Total In-Force Policies: 270,193
+- Average Market Share: 10.0% (10 players)
+- Market Share Range: 6.6% - 11.5%
+- Market LR: 105.2%
+- LR Range: 102.2% - 108.8%
+
 
 ## Competition Scoring
 
